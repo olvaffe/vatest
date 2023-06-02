@@ -34,6 +34,7 @@ idep_vautil = declare_dependency(
 
 tests = [
   'info',
+  'jpegdec',
 ]
 
 foreach t : tests

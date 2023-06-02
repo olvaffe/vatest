@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <unistd.h>
 #include <va/va.h>
 #include <va/va_drm.h>
@@ -267,6 +268,229 @@ va_cleanup(struct va *va)
 
     vaTerminate(va->display);
     close(va->native_display);
+}
+
+static inline const struct va_pair *
+va_find_pair(const struct va *va, VAProfile profile, VAEntrypoint entrypoint)
+{
+    for (int i = 0; i < va->pair_count; i++) {
+        const struct va_pair *pair = &va->pairs[i];
+        if (pair->profile == profile && pair->entrypoint == entrypoint)
+            return pair;
+    }
+    return NULL;
+}
+
+static inline VAConfigID
+va_create_config(struct va *va,
+                 VAProfile profile,
+                 VAEntrypoint entrypoint,
+                 unsigned int rt_formats)
+{
+    VAConfigAttrib attrs[VAConfigAttribTypeMax];
+    int attr_count = 0;
+
+    attrs[attr_count].type = VAConfigAttribRTFormat;
+    attrs[attr_count++].value = rt_formats;
+
+    VAConfigID config;
+    va->status = vaCreateConfig(va->display, profile, entrypoint, attrs, attr_count, &config);
+    va_check(va, "failed to create config");
+
+    return config;
+}
+
+static inline void
+va_destroy_config(struct va *va, VAConfigID config)
+{
+    va->status = vaDestroyConfig(va->display, config);
+    va_check(va, "failed to destroy config");
+}
+
+static inline VASurfaceID
+va_create_surface(
+    struct va *va, unsigned int rt_format, unsigned int width, unsigned int height, int fourcc)
+{
+    VASurfaceAttrib attrs[VASurfaceAttribCount];
+    int attr_count = 0;
+
+    attrs[attr_count].type = VASurfaceAttribPixelFormat;
+    attrs[attr_count].value.type = VAGenericValueTypeInteger;
+    attrs[attr_count++].value.value.i = fourcc;
+
+    VASurfaceID surf;
+    va->status =
+        vaCreateSurfaces(va->display, rt_format, width, height, &surf, 1, attrs, attr_count);
+    va_check(va, "failed to create surface");
+
+    return surf;
+}
+
+static inline void
+va_destroy_surface(struct va *va, VASurfaceID surf)
+{
+    va->status = vaDestroySurfaces(va->display, &surf, 1);
+    va_check(va, "failed to destroy surface");
+}
+
+static inline void
+va_sync_surface(struct va *va, VASurfaceID surf)
+{
+    va->status = vaSyncSurface(va->display, surf);
+    va_check(va, "failed to sync surface");
+}
+
+static inline VAContextID
+va_create_context(
+    struct va *va, VAConfigID config, int width, int height, int flag, VASurfaceID surf)
+{
+    VAContextID ctx;
+    va->status = vaCreateContext(va->display, config, width, height, flag, &surf, 1, &ctx);
+    va_check(va, "failed to create context");
+
+    return ctx;
+}
+
+static inline void
+va_destroy_context(struct va *va, VAContextID ctx)
+{
+    va->status = vaDestroyContext(va->display, ctx);
+    va_check(va, "failed to destroy context");
+}
+
+static inline VABufferID
+va_create_buffer(
+    struct va *va, VAContextID ctx, VABufferType type, unsigned int size, const void *data)
+{
+    VABufferID buf;
+    va->status = vaCreateBuffer(va->display, ctx, type, size, 1, (void *)data, &buf);
+    va_check(va, "failed to create buffer");
+
+    return buf;
+}
+
+static inline void
+va_destroy_buffer(struct va *va, VABufferID buf)
+{
+    va->status = vaDestroyBuffer(va->display, buf);
+    va_check(va, "failed to destroy buffer");
+}
+
+static inline void *
+va_map_buffer(struct va *va, VABufferID buf)
+{
+    void *ptr;
+    va->status = vaMapBuffer(va->display, buf, &ptr);
+    va_check(va, "failed to map buffer");
+    return ptr;
+}
+
+static inline void
+va_unmap_buffer(struct va *va, VABufferID buf)
+{
+    va->status = vaUnmapBuffer(va->display, buf);
+    va_check(va, "failed to unmap buffer");
+}
+
+static inline void
+va_begin_picture(struct va *va, VAContextID ctx, VASurfaceID surf)
+{
+    va->status = vaBeginPicture(va->display, ctx, surf);
+    va_check(va, "failed to begin picture");
+}
+
+static inline void
+va_render_picture(struct va *va, VAContextID ctx, const VABufferID *bufs, int count)
+{
+    va->status = vaRenderPicture(va->display, ctx, (VABufferID *)bufs, count);
+    va_check(va, "failed to render picture");
+}
+
+static inline void
+va_end_picture(struct va *va, VAContextID ctx)
+{
+    va->status = vaEndPicture(va->display, ctx);
+    va_check(va, "failed to end picture");
+}
+
+static inline void
+va_create_image(struct va *va, int width, int height, int fourcc, VAImage *img)
+{
+    VAImageFormat format = {
+        .fourcc = fourcc,
+    };
+
+    va->status = vaCreateImage(va->display, &format, width, height, img);
+    va_check(va, "failed to create image");
+}
+
+static inline void
+va_destroy_image(struct va *va, VAImageID img)
+{
+    va->status = vaDestroyImage(va->display, img);
+    va_check(va, "failed to destroy image");
+}
+
+static inline void
+va_get_image(
+    struct va *va, VASurfaceID surf, unsigned int width, unsigned int height, VAImageID img)
+{
+    va->status = vaGetImage(va->display, surf, 0, 0, width, height, img);
+    va_check(va, "failed to get image");
+}
+
+static inline void
+va_save_image(struct va *va, const VAImage *img, const char *filename)
+{
+    if (img->format.fourcc != VA_FOURCC_BGRA)
+        va_die("only VA_FOURCC_BGRA is supported");
+
+    void *ptr = va_map_buffer(va, img->buf);
+
+    FILE *fp = fopen(filename, "w");
+    if (!fp)
+        va_die("failed to open %s", filename);
+
+    fprintf(fp, "P6 %u %u %u\n", img->width, img->height, 255);
+    for (uint32_t y = 0; y < img->height; y++) {
+        for (uint32_t x = 0; x < img->width; x++) {
+            const uint8_t *pixel = ptr + img->pitches[0] * y + 4 * x;
+            const char bytes[3] = { pixel[2], pixel[1], pixel[0] };
+            if (fwrite(bytes, sizeof(bytes), 1, fp) != 1)
+                va_die("failed to write pixel (%u, %u)", x, y);
+        }
+    }
+
+    fclose(fp);
+
+    va_unmap_buffer(va, img->buf);
+}
+
+static inline const void *
+va_map_file(struct va *va, const char *filename, size_t *out_size)
+{
+    const int fd = open(filename, O_RDONLY);
+    if (fd < 0)
+        va_die("failed to open %s", filename);
+
+    const off_t size = lseek(fd, 0, SEEK_END);
+    if (size < 0)
+        va_die("failed to seek file");
+
+    const void *ptr = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
+    if (ptr == MAP_FAILED)
+        va_die("failed to map file");
+
+    close(fd);
+
+    *out_size = size;
+    return ptr;
+}
+
+static inline void
+va_unmap_file(struct va *va, const void *ptr, size_t size)
+{
+    munmap((void *)ptr, size);
 }
 
 #endif /* VAUTIL_H */
