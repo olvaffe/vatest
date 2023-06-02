@@ -46,6 +46,8 @@ struct va {
     int major;
     int minor;
     const char *vendor;
+    VADisplayAttribute *attrs;
+    int attr_count;
 
     struct va_pair *pairs;
     int pair_count;
@@ -132,6 +134,22 @@ va_init_display(struct va *va)
     va_check(va, "failed to initialize display");
 
     va->vendor = vaQueryVendorString(va->display);
+
+    const int attr_max = vaMaxNumDisplayAttributes(va->display);
+    va->attrs = malloc(sizeof(*va->attrs) * attr_max);
+    if (!va->attrs)
+        va_die("failed to alloc display attrs");
+    va->status = vaQueryDisplayAttributes(va->display, va->attrs, &va->attr_count);
+    va_check(va, "failed to query display attrs");
+
+    for (int i = 0; i < va->attr_count; i++) {
+        VADisplayAttribute *attr = &va->attrs[i];
+        if (!(attr->flags & VA_DISPLAY_ATTRIB_GETTABLE))
+            continue;
+
+        va->status = vaGetDisplayAttributes(va->display, attr, 1);
+        va_check(va, "failed to get display attr value");
+    }
 }
 
 static inline void
@@ -205,6 +223,7 @@ static inline void
 va_cleanup(struct va *va)
 {
     free(va->pairs);
+    free(va->attrs);
 
     vaTerminate(va->display);
     close(va->native_display);

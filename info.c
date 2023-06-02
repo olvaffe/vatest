@@ -55,6 +55,26 @@ info_display(const struct va *va)
 {
     va_log("version: %d.%d", va->major, va->minor);
     va_log("vendor: %s", va->vendor);
+    va_log("attrs:");
+
+    for (int i = 0; i < va->attr_count; i++) {
+        const VADisplayAttribute *attr = &va->attrs[i];
+        if (attr->flags == VA_DISPLAY_ATTRIB_NOT_SUPPORTED)
+            continue;
+
+        switch (attr->type) {
+        case VADisplayAttribCopy:
+            va_log(" Copy: 0x%x", attr->value);
+            break;
+        case VADisplayPCIID:
+            va_log(" PCIID: 0x%04x:0x%04x", (attr->value >> 16) & 0xffff, attr->value & 0xffff);
+            break;
+        default:
+            va_log("  type %d: min %d max %d val %d flags 0x%x", attr->type, attr->min_value,
+                   attr->max_value, attr->value, attr->flags);
+            break;
+        }
+    }
 }
 
 int
