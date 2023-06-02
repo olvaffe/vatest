@@ -1,0 +1,21 @@
+BasedOnStyle: LLVM
+AlwaysBreakAfterReturnType: TopLevel
+BinPackParameters: false
+BraceWrapping:
+  AfterControlStatement: false
+  AfterEnum: false
+  AfterFunction: true
+  AfterStruct: false
+  BeforeElse: false
+  SplitEmptyFunction: true
+BreakBeforeBraces: Custom
+ColumnLimit: 98
+ContinuationIndentWidth: 4
+Cpp11BracedListStyle: false
+IncludeBlocks: Regroup
+IndentWidth: 4
+PenaltyBreakBeforeFirstCallParameter: 1
+PenaltyExcessCharacter: 100
+SpaceAfterCStyleCast: false
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeParens: ControlStatementsExceptForEachMacros
