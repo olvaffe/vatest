@@ -52,6 +52,9 @@ struct va {
     struct va_pair *pairs;
     int pair_count;
 
+    VAImageFormat *img_formats;
+    unsigned int img_count;
+
     VAImageFormat *subpic_formats;
     unsigned int *subpic_flags;
     unsigned int subpic_count;
@@ -213,6 +216,19 @@ va_init_pairs(struct va *va)
 }
 
 static inline void
+va_init_images(struct va *va)
+{
+    const int format_max = vaMaxNumImageFormats(va->display);
+
+    va->img_formats = malloc(sizeof(*va->img_formats) * format_max);
+    if (!va->img_formats)
+        va_die("failed to alloc img formats");
+
+    va->status = vaQueryImageFormats(va->display, va->img_formats, &va->img_count);
+    va_check(va, "failed to query img formats");
+}
+
+static inline void
 va_init_subpics(struct va *va)
 {
     const int format_max = vaMaxNumSubpictureFormats(va->display);
@@ -237,6 +253,7 @@ va_init(struct va *va, const struct va_init_params *params)
 
     va_init_display(va);
     va_init_pairs(va);
+    va_init_images(va);
     va_init_subpics(va);
 }
 
@@ -244,6 +261,7 @@ static inline void
 va_cleanup(struct va *va)
 {
     free(va->subpic_formats);
+    free(va->img_formats);
     free(va->pairs);
     free(va->attrs);
 

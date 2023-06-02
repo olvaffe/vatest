@@ -19,6 +19,18 @@ info_subpics(const struct va *va)
 }
 
 static void
+info_images(const struct va *va)
+{
+    va_log("image formats:");
+    for (unsigned int i = 0; i < va->img_count; i++) {
+        const VAImageFormat *fmt = &va->img_formats[i];
+        const char *fourcc = (const char *)&fmt->fourcc;
+
+        va_log("  %c%c%c%c", fourcc[0], fourcc[1], fourcc[2], fourcc[3]);
+    }
+}
+
+static void
 info_pair_attr(const struct va *va, const struct va_pair *pair, const VAConfigAttrib *attr)
 {
     if (attr->value == VA_ATTRIB_NOT_SUPPORTED)
@@ -99,6 +111,7 @@ main(void)
 
     info_display(&va);
     info_pairs(&va);
+    info_images(&va);
     info_subpics(&va);
 
     va_cleanup(&va);
