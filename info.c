@@ -6,6 +6,19 @@
 #include "vautil.h"
 
 static void
+info_subpics(const struct va *va)
+{
+    va_log("subpicture formats:");
+    for (unsigned int i = 0; i < va->subpic_count; i++) {
+        const VAImageFormat *fmt = &va->subpic_formats[i];
+        const char *fourcc = (const char *)&fmt->fourcc;
+        unsigned flags = va->subpic_flags[i];
+
+        va_log("  %c%c%c%c: 0x%x", fourcc[0], fourcc[1], fourcc[2], fourcc[3], flags);
+    }
+}
+
+static void
 info_pair_attr(const struct va *va, const struct va_pair *pair, const VAConfigAttrib *attr)
 {
     if (attr->value == VA_ATTRIB_NOT_SUPPORTED)
@@ -64,10 +77,10 @@ info_display(const struct va *va)
 
         switch (attr->type) {
         case VADisplayAttribCopy:
-            va_log(" Copy: 0x%x", attr->value);
+            va_log("  Copy: 0x%x", attr->value);
             break;
         case VADisplayPCIID:
-            va_log(" PCIID: 0x%04x:0x%04x", (attr->value >> 16) & 0xffff, attr->value & 0xffff);
+            va_log("  PCIID: 0x%04x:0x%04x", (attr->value >> 16) & 0xffff, attr->value & 0xffff);
             break;
         default:
             va_log("  type %d: min %d max %d val %d flags 0x%x", attr->type, attr->min_value,
@@ -86,6 +99,7 @@ main(void)
 
     info_display(&va);
     info_pairs(&va);
+    info_subpics(&va);
 
     va_cleanup(&va);
 
