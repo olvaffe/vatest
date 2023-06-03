@@ -442,8 +442,8 @@ va_get_image(
 static inline void
 va_save_image(struct va *va, const VAImage *img, const char *filename)
 {
-    if (img->format.fourcc != VA_FOURCC_BGRA)
-        va_die("only VA_FOURCC_BGRA is supported");
+    if (img->format.fourcc != VA_FOURCC_NV12)
+        va_die("only VA_FOURCC_NV12 is supported");
 
     void *ptr = va_map_buffer(va, img->buf);
 
@@ -454,8 +454,16 @@ va_save_image(struct va *va, const VAImage *img, const char *filename)
     fprintf(fp, "P6 %u %u %u\n", img->width, img->height, 255);
     for (uint32_t y = 0; y < img->height; y++) {
         for (uint32_t x = 0; x < img->width; x++) {
-            const uint8_t *pixel = ptr + img->pitches[0] * y + 4 * x;
-            const char bytes[3] = { pixel[2], pixel[1], pixel[0] };
+            const uint8_t *yy = ptr + img->offsets[0] + img->pitches[0] * y + x;
+            const uint8_t *uv = ptr + img->offsets[1] + img->pitches[1] * (y / 2) + (x & ~1);
+
+            const int yuv[3] = { (int)*yy, (int)uv[0] - 128, (int)uv[1] - 128 };
+            const int rgb[3] = { yuv[0] + 1.402000f * yuv[2],
+                                 yuv[0] - 0.344136f * yuv[1] - 0.714136f * yuv[2],
+                                 yuv[0] + 1.772000f * yuv[1] };
+#define CLAMP(v) v > 255 ? 255 : v < 0 ? 0 : v
+            const char bytes[3] = { CLAMP(rgb[0]), CLAMP(rgb[1]), CLAMP(rgb[2]) };
+#undef CLAMP
             if (fwrite(bytes, sizeof(bytes), 1, fp) != 1)
                 va_die("failed to write pixel (%u, %u)", x, y);
         }

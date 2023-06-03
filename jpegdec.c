@@ -98,7 +98,7 @@ jpegdec_test_dump(struct jpegdec_test *test, const char *filename)
     struct va *va = &test->va;
     VAImage img;
 
-    va_create_image(va, file->sof0.X, file->sof0.Y, VA_FOURCC_BGRA, &img);
+    va_create_image(va, file->sof0.X, file->sof0.Y, VA_FOURCC_NV12, &img);
     va_get_image(va, test->surface, file->sof0.X, file->sof0.Y, img.image_id);
     va_save_image(va, &img, filename);
     va_destroy_image(va, img.image_id);
@@ -183,8 +183,8 @@ jpegdec_test_prepare(struct jpegdec_test *test)
     }
     slice_param.restart_interval = file->dri.Ri;
 
-    const int mcu_cols = file->sof0.X / (file->sof0.Hi[0] * 8);
-    const int mcu_rows = file->sof0.Y / (file->sof0.Vi[0] * 8);
+    const int mcu_cols = (file->sof0.X + file->sof0.Hi[0] * 8 - 1) / (file->sof0.Hi[0] * 8);
+    const int mcu_rows = (file->sof0.Y + file->sof0.Vi[0] * 8 - 1) / (file->sof0.Vi[0] * 8);
     slice_param.num_mcus = mcu_cols * mcu_rows;
 
     test->config = va_create_config(va, test->profile, test->entrypoint, rt_format);
@@ -459,7 +459,6 @@ jpegdec_test_cleanup(struct jpegdec_test *test)
 {
     struct va *va = &test->va;
 
-    va_destroy_config(va, test->config);
     va_cleanup(va);
 }
 
